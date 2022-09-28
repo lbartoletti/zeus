@@ -112,9 +112,9 @@ class CKernel(Kernel):
                                   lambda contents: self._write_to_stdout(contents.decode()),
                                   lambda contents: self._write_to_stderr(contents.decode()))
 
-    def compile_with_gcc(self, filenames, binary_filename, cflags=None, ldflags=None):
+    def compile(self, compiler, filenames, binary_filename, cflags=None, ldflags=None):
         cflags = ['-std=c11', '-fPIC', '-shared', '-rdynamic'] + cflags
-        args = ['gcc'] + filenames + cflags + ['-o', binary_filename] + ldflags
+        args = [compiler] + filenames + cflags + ['-o', binary_filename] + ldflags
         print(args)
         return self.create_jupyter_subprocess(args)
 
@@ -123,7 +123,9 @@ class CKernel(Kernel):
         magics = {'cflags': [],
                   'ldflags': [],
                   'additionalfiles': [],
-                  'args': []}
+                  'args': [],
+                  'compiler': 'gcc'
+                  }
 
         for line in code.splitlines():
             if line.startswith('//%'):
@@ -137,6 +139,8 @@ class CKernel(Kernel):
                     # Split arguments respecting quotes
                     for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
                         magics[key] += [argument.strip('"')]
+                elif key == 'compiler':
+                    magics[key] = value
 
         return magics
 
@@ -149,13 +153,14 @@ class CKernel(Kernel):
             source_file.write(code)
             source_file.flush()
             with self.new_temp_file(suffix='.out') as binary_file:
-                p = self.compile_with_gcc([source_file.name] + magics['additionalfiles'], binary_file.name, magics['cflags'], magics['ldflags'])
+                p = self.compile(magics['compiler'], [source_file.name] + magics['additionalfiles'], binary_file.name, magics['cflags'], magics['ldflags'])
                 while p.poll() is None:
                     p.write_contents()
                 p.write_contents()
                 if p.returncode != 0:  # Compilation failed
                     self._write_to_stderr(
-                            "[C kernel] GCC exited with code {}, the executable will not be executed".format(
+                            "[C kernel] {} exited with code {}, the executable will not be executed".format(
+                                magics['compiler'],
                                     p.returncode))
                     return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
                             'user_expressions': {}}
