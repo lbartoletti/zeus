@@ -112,8 +112,8 @@ class CKernel(Kernel):
                                   lambda contents: self._write_to_stdout(contents.decode()),
                                   lambda contents: self._write_to_stderr(contents.decode()))
 
-    def compile(self, compiler, filenames, binary_filename, cflags=None, ldflags=None):
-        cflags = ['-std=c11', '-fPIC', '-shared', '-rdynamic'] + cflags
+    def compile(self, compiler, standard, filenames, binary_filename, cflags=None, ldflags=None):
+        cflags = ['-std=' + standard, '-fPIC', '-shared', '-rdynamic'] + cflags
         args = [compiler] + filenames + cflags + ['-o', binary_filename] + ldflags
         print(args)
         return self.create_jupyter_subprocess(args)
@@ -124,7 +124,9 @@ class CKernel(Kernel):
                   'ldflags': [],
                   'additionalfiles': [],
                   'args': [],
-                  'compiler': 'gcc'
+                  'compiler': 'gcc',
+                  'standard': 'c11',
+                  'code': []
                   }
 
         for line in code.splitlines():
@@ -139,8 +141,15 @@ class CKernel(Kernel):
                     # Split arguments respecting quotes
                     for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
                         magics[key] += [argument.strip('"')]
-                elif key == 'compiler':
+                elif key in ['compiler', 'standard']:
                     magics[key] = value
+            else:
+                # Since we can use c89 standard, leading '//%' is not possible
+                # and will return an error:
+                # error: C++ style comments are not allowed in ISO C90
+                #    1 | //%standard:c89
+                #      | ^
+                magics['code'].append(line)
 
         return magics
 
@@ -148,12 +157,16 @@ class CKernel(Kernel):
                    user_expressions=None, allow_stdin=False):
 
         magics = self._filter_magics(code)
+        if magics['standard'].startswith('c++'):
+            suffix = '.cpp'
+        else:
+            suffix = '.c'
 
-        with self.new_temp_file(suffix='.c') as source_file:
-            source_file.write(code)
+        with self.new_temp_file(suffix=suffix) as source_file:
+            source_file.write("\n".join(magics['code']))
             source_file.flush()
             with self.new_temp_file(suffix='.out') as binary_file:
-                p = self.compile(magics['compiler'], [source_file.name] + magics['additionalfiles'], binary_file.name, magics['cflags'], magics['ldflags'])
+                p = self.compile(magics['compiler'], magics['standard'], [source_file.name] + magics['additionalfiles'], binary_file.name, magics['cflags'], magics['ldflags'])
                 while p.poll() is None:
                     p.write_contents()
                 p.write_contents()
