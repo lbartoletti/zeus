@@ -112,15 +112,17 @@ class CKernel(Kernel):
                                   lambda contents: self._write_to_stdout(contents.decode()),
                                   lambda contents: self._write_to_stderr(contents.decode()))
 
-    def compile_with_gcc(self, source_filename, binary_filename, cflags=None, ldflags=None):
+    def compile_with_gcc(self, filenames, binary_filename, cflags=None, ldflags=None):
         cflags = ['-std=c11', '-fPIC', '-shared', '-rdynamic'] + cflags
-        args = ['gcc', source_filename] + cflags + ['-o', binary_filename] + ldflags
+        args = ['gcc'] + filenames + cflags + ['-o', binary_filename] + ldflags
+        print(args)
         return self.create_jupyter_subprocess(args)
 
     def _filter_magics(self, code):
 
         magics = {'cflags': [],
                   'ldflags': [],
+                  'additionalfiles': [],
                   'args': []}
 
         for line in code.splitlines():
@@ -131,10 +133,10 @@ class CKernel(Kernel):
                 if key in ['ldflags', 'cflags']:
                     for flag in value.split():
                         magics[key] += [flag]
-                elif key == "args":
+                elif key in ["args", "additionalfiles"]:
                     # Split arguments respecting quotes
                     for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
-                        magics['args'] += [argument.strip('"')]
+                        magics[key] += [argument.strip('"')]
 
         return magics
 
@@ -147,7 +149,7 @@ class CKernel(Kernel):
             source_file.write(code)
             source_file.flush()
             with self.new_temp_file(suffix='.out') as binary_file:
-                p = self.compile_with_gcc(source_file.name, binary_file.name, magics['cflags'], magics['ldflags'])
+                p = self.compile_with_gcc([source_file.name] + magics['additionalfiles'], binary_file.name, magics['cflags'], magics['ldflags'])
                 while p.poll() is None:
                     p.write_contents()
                 p.write_contents()
