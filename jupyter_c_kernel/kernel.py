@@ -75,7 +75,7 @@ class CKernel(Kernel):
                      'mimetype': 'text/plain',
                      'file_extension': '.c'}
     banner = "C kernel.\n" \
-             "Uses gcc, compiles in C11, and creates source code files and executables in temporary folder.\n"
+            "Uses cc, compiles in C11, and creates source code files and executables in temporary folder.\n"
 
     def __init__(self, *args, **kwargs):
         super(CKernel, self).__init__(*args, **kwargs)
@@ -84,7 +84,7 @@ class CKernel(Kernel):
         os.close(mastertemp[0])
         self.master_path = mastertemp[1]
         filepath = path.join(path.dirname(path.realpath(__file__)), 'resources', 'master.c')
-        subprocess.call(['gcc', filepath, '-std=c11', '-rdynamic', '-ldl', '-o', self.master_path])
+        subprocess.call(['cc', filepath, '-std=c11', '-rdynamic', '-ldl', '-o', self.master_path])
 
     def cleanup_files(self):
         """Remove all the temporary files created by the kernel"""
@@ -124,7 +124,7 @@ class CKernel(Kernel):
                   'ldflags': [],
                   'additionalfiles': [],
                   'args': [],
-                  'compiler': 'gcc',
+                  'compiler': 'cc',
                   'standard': 'c11',
                   'code': []
                   }
@@ -155,7 +155,6 @@ class CKernel(Kernel):
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
-
         magics = self._filter_magics(code)
         if magics['standard'].startswith('c++'):
             suffix = '.cpp'
@@ -174,7 +173,7 @@ class CKernel(Kernel):
                     self._write_to_stderr(
                             "[C kernel] {} exited with code {}, the executable will not be executed".format(
                                 magics['compiler'],
-                                    p.returncode))
+                                p.returncode))
                     return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
                             'user_expressions': {}}
 
