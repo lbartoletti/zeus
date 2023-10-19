@@ -155,6 +155,22 @@ class CKernel(Kernel):
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
+        if code.startswith('!'):
+            output = code[1:]
+            if not silent:
+                self.send_response(self.iopub_socket, 'stream', {
+                    'name': 'stdout',
+                    'text': output
+                })
+                p = self.create_jupyter_subprocess([output])
+                while p.poll() is None:
+                    p.write_contents()
+                p.write_contents()
+
+                if p.returncode != 0:
+                    self._write_to_stderr("[C kernel] Executable exited with code {}".format(p.returncode))
+                return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [], 'user_expressions': {}}
+
         magics = self._filter_magics(code)
         if magics['standard'].startswith('c++'):
             suffix = '.cpp'
